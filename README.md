@@ -51,7 +51,7 @@ Server is running on http://localhost:3000     <———— 此 URL 即页面�
 </div>
 
 ## 支持
-* 欢迎前往[Issue](https://github.com/SaKongA/Upper/issues)提出您遇到的任何问题；
+* 欢迎前往[Issue](https://github.com/SaKongA/PopDownloader/issues)提出您遇到的任何问题；
 * 如果您对我的项目感兴趣，需要更多帮助与支持，再或需要完善其他功能，欢迎联系我！
 
 ## 声明
