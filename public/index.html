@@ -87,6 +87,13 @@
               <el-button v-if="scope.row.type === '视频'" size="mini" type="warning" @click="downloadAudio(scope.row)">
                 下载音频
               </el-button>
+              <el-button
+                v-if="scope.row.type === '音频'"
+                size="mini"
+                type="info"
+                @click="downloadLyrics(scope.row)">
+                下载歌词
+              </el-button>
             </div>
           </template>
         </el-table-column>

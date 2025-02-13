@@ -9,6 +9,7 @@ const archiver = require('archiver');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const { downloadVideo } = require('./utils/mediaUtils');
+const { JSDOM } = require('jsdom');
 
 const app = express();
 const server = http.createServer(app);
@@ -39,8 +40,6 @@ async function getDownloadUrl(id, type) {
 
     const playlistData = await axios.get(baseUrl);
 
-    const jsdom = require("jsdom");
-    const { JSDOM } = jsdom;
     const { document } = (new JSDOM(playlistData.data)).window;
     const scriptElements = document.querySelectorAll('script');
     let routerData = null;
@@ -99,8 +98,6 @@ app.get('/getPlaylist', async (req, res) => {
     const playlistUrl = `https://music.douyin.com${metaContent}`;
     const playlistData = await axios.get(playlistUrl);
 
-    const jsdom = require("jsdom");
-    const { JSDOM } = jsdom;
     const { document } = (new JSDOM(playlistData.data)).window;
     const scriptElements = document.querySelectorAll('script');
     let routerData = null;
@@ -355,5 +352,79 @@ async function downloadFile(url, filePath) {
     writer.on('error', reject);
   });
 }
+
+// 修改获取歌词的函数
+async function getLyrics(trackId) {
+  try {
+    const url = `https://music.douyin.com/qishui/share/track?track_id=${trackId}`;
+    const { data } = await axios.get(url);
+    const dom = new JSDOM(data);
+    const document = dom.window.document;
+
+    // 获取歌曲信息
+    const title = document.querySelector('.title')?.textContent || '';
+    const artist = document.querySelector('.artist-name-max')?.textContent || '';
+    
+    // 获取所有歌词行
+    const lyricsElements = document.querySelectorAll('.ssr-lyric');
+    let lyrics = '';
+    
+    if (lyricsElements.length > 0) {
+      lyrics = Array.from(lyricsElements)
+        .map(el => el.textContent)
+        .join('\n');
+    } else {
+      lyrics = '纯音乐，请欣赏~';
+    }
+
+    return {
+      title,
+      artist,
+      lyrics
+    };
+  } catch (error) {
+    console.error('获取歌词失败:', error);
+    throw error;
+  }
+}
+
+// 添加下载歌词的路由
+app.get('/downloadLyrics', async (req, res) => {
+  const { trackId } = req.query;
+  if (!trackId) {
+    return res.status(400).json({ error: '缺少 trackId 参数' });
+  }
+
+  try {
+    const { title, artist, lyrics } = await getLyrics(trackId);
+    const fileName = `${title}-${artist}.txt`;
+    const sanitizedFileName = sanitizeFileName(fileName);
+    
+    // 创建临时文件
+    const tempPath = path.join(__dirname, 'temp', sanitizedFileName);
+    fs.writeFileSync(tempPath, lyrics, 'utf8');
+
+    // 设置响应头
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(sanitizedFileName)}`);
+    
+    // 发送文件
+    res.sendFile(tempPath, (err) => {
+      if (err) {
+        console.error('发送文件时出错:', err);
+      }
+      // 删除临时文件
+      fs.unlink(tempPath, (unlinkErr) => {
+        if (unlinkErr) {
+          console.error('删除临时文件时出错:', unlinkErr);
+        }
+      });
+    });
+
+  } catch (error) {
+    console.error('下载歌词失败:', error);
+    res.status(500).json({ error: '下载歌词失败' });
+  }
+});
 
 server.listen(port, () => console.log(`Server is running on http://localhost:${port}`));

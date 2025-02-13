@@ -135,6 +135,35 @@ new Vue({
           this.$message.error('音频下载失败');
         }
       }
+    },
+
+    async downloadLyrics(track) {
+      if (track.type !== '音频') {
+        this.$message.warning('只有音频类型才支持下载歌词');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/downloadLyrics?trackId=${track.id}`);
+        if (!response.ok) {
+          throw new Error('下载歌词失败');
+        }
+
+        // 创建一个 blob 链接并触发下载
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${track.name}-${track.artists}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+      } catch (error) {
+        console.error('下载歌词失败:', error);
+        this.$message.error('下载歌词失败');
+      }
     }
   },
 
