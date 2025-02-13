@@ -22,6 +22,12 @@ app.use(express.json());
 app.use(express.static('public'));
 app.use('/temp', express.static(path.join(__dirname, 'temp'))); // 服务 temp 目录
 
+// 检测缓存文件夹是否创建
+const tempDir = path.join(__dirname, 'temp');
+if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+}
+
 /**
  * 获取视频或音频下载链接
  */
