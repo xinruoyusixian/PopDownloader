@@ -43,27 +43,61 @@ async function getDownloadUrl(id, type) {
     const { document } = (new JSDOM(playlistData.data)).window;
     const scriptElements = document.querySelectorAll('script');
     let routerData = null;
+
+    // 遍历所有script标签寻找_ROUTER_DATA
     scriptElements.forEach(script => {
-      if (script.textContent.includes("window._ROUTER_DATA")) {
-        const jsonString = script.textContent.match(/window._ROUTER_DATA\s*=\s*(\{.*\})/s);
-        if (jsonString && jsonString[1]) {
-          try {
-            routerData = JSON.parse(jsonString[1]);
-          } catch (error) {
-            console.error("解析 JSON 出错:", error.message);
+      const content = script.textContent;
+      if (content && content.includes('_ROUTER_DATA')) {
+        try {
+          const match = content.match(/_ROUTER_DATA\s*=\s*({[\s\S]*?});/);
+          if (match && match[1]) {
+            routerData = JSON.parse(match[1]);
+            console.log('成功提取到_ROUTER_DATA');
           }
+        } catch (error) {
+          console.error('解析_ROUTER_DATA时出错:', error);
         }
       }
     });
-    if (routerData) {
-      console.log("匹配到的 _ROUTER_DATA 数据:", routerData);
-    } else {
-      console.error("无法找到 _ROUTER_DATA 数据。");
+
+    // 如果没有找到数据，尝试从 modern-inline 中提取
+    if (!routerData) {
+      const inlineScript = document.querySelector('script[data-script-src="modern-inline"]');
+      if (inlineScript) {
+        try {
+          const content = inlineScript.textContent;
+          const match = content.match(/_ROUTER_DATA\s*=\s*({[\s\S]*?});/);
+          if (match && match[1]) {
+            routerData = JSON.parse(match[1]);
+            console.log('从modern-inline script中提取到_ROUTER_DATA');
+          }
+        } catch (error) {
+          console.error('从modern-inline解析_ROUTER_DATA时出错:', error);
+        }
+      }
     }
 
-    const downloadUrl = type === 'video'
-      ? routerData.loaderData.ugc_video_page.videoOptions.url
-      : routerData.loaderData.track_page.audioWithLyricsOption.url;
+    if (!routerData) {
+      console.error('无法找到_ROUTER_DATA数据');
+      return null;
+    }
+
+    // 修改验证逻辑以适应新的数据结构
+    let downloadUrl;
+    if (type === 'video') {
+      if (!routerData.loaderData?.ugc_video_page?.videoOptions?.url) {
+        console.error('视频数据结构不正确:', routerData);
+        return null;
+      }
+      downloadUrl = routerData.loaderData.ugc_video_page.videoOptions.url;
+    } else {
+      // 音频类型
+      if (!routerData.loaderData?.track_page?.audioWithLyricsOption?.url) {
+        console.error('音频数据结构不正确:', routerData);
+        return null;
+      }
+      downloadUrl = routerData.loaderData.track_page.audioWithLyricsOption.url;
+    }
 
     if (downloadUrl) {
       return downloadUrl
@@ -71,12 +105,14 @@ async function getDownloadUrl(id, type) {
         .replace(/%7C/g, "|")
         .replace(/%3D/g, "=");
     }
+
     console.error('未找到下载链接:', routerData);
+    return null;
 
   } catch (error) {
     console.error('获取下载链接失败:', error.message);
+    return null;
   }
-  return null;
 }
 
 /**
@@ -91,36 +127,112 @@ app.get('/getPlaylist', async (req, res) => {
 
   try {
     const extractedUrl = matchedUrls[0];
-    const { data } = await axios.get(extractedUrl);
+    console.log('提取到的URL:', extractedUrl);
+    const { data } = await axios.get(extractedUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      },
+      timeout: 10000 // 10秒超时
+    });
+    
     const $ = cheerio.load(data);
+    
+    // 检查meta标签是否存在
     const metaContent = $('meta[name="url"]').attr('content');
+    if (!metaContent) {
+      console.error('未找到meta[name="url"]标签');
+      return res.status(400).json({ error: '无法解析分享链接，请确认链接正确' });
+    }
+    
     const coverUrl = $('meta[property="og:image"]').attr('content');
-    const playlistUrl = `https://music.douyin.com${metaContent}`;
+    
+    // 修复这里的URL拼接
+    const playlistUrl = metaContent.startsWith('http') 
+      ? metaContent 
+      : `https://music.douyin.com${metaContent}`;
+      
+    console.log('请求歌单URL:', playlistUrl); // 添加日志以便调试
+    
     const playlistData = await axios.get(playlistUrl);
 
     const { document } = (new JSDOM(playlistData.data)).window;
     const scriptElements = document.querySelectorAll('script');
     let routerData = null;
+
+    // 遍历所有script标签寻找_ROUTER_DATA
     scriptElements.forEach(script => {
-      if (script.textContent.includes("window._ROUTER_DATA")) {
-        const jsonString = script.textContent.match(/window._ROUTER_DATA\s*=\s*(\{.*\})/s);
-        if (jsonString && jsonString[1]) {
-          try {
-            routerData = JSON.parse(jsonString[1]);
-          } catch (error) {
-            console.error("解析 JSON 出错:", error.message);
+      const content = script.textContent;
+      if (content && content.includes('_ROUTER_DATA')) {
+        try {
+          // 使用正则表达式提取_ROUTER_DATA的值
+          const match = content.match(/_ROUTER_DATA\s*=\s*({[\s\S]*?});/);
+          if (match && match[1]) {
+            routerData = JSON.parse(match[1]);
+            console.log('成功提取到_ROUTER_DATA');
           }
+        } catch (error) {
+          console.error('解析_ROUTER_DATA时出错:', error);
         }
       }
     });
-    if (routerData) {
-      console.log("匹配到的 _ROUTER_DATA 数据:", routerData);
-    } else {
-      console.error("无法找到 _ROUTER_DATA 数据。");
+
+    // 如果没有找到数据，尝试从 data-script-src="modern-inline" 的script标签中提取
+    if (!routerData) {
+      const inlineScript = document.querySelector('script[data-script-src="modern-inline"]');
+      if (inlineScript) {
+        try {
+          const content = inlineScript.textContent;
+          const match = content.match(/_ROUTER_DATA\s*=\s*({[\s\S]*?});/);
+          if (match && match[1]) {
+            routerData = JSON.parse(match[1]);
+            console.log('从modern-inline script中提取到_ROUTER_DATA');
+          }
+        } catch (error) {
+          console.error('从modern-inline解析_ROUTER_DATA时出错:', error);
+        }
+      }
     }
 
-    const playlistInfo = routerData.loaderData.playlist_page.playlistInfo;
-    const medias = routerData.loaderData.playlist_page.medias;
+    if (!routerData) {
+      console.error('无法找到_ROUTER_DATA数据');
+      console.log('页面内容:', playlistData.data); // 输出页面内容以便调试
+      return res.status(400).json({ error: '无法解析歌单数据，请确认链接正确' });
+    }
+
+    // 修改数据结构验证
+    if (!routerData.loaderData?.playlist_page && !routerData.loaderData?.track_page) {
+      console.error('_ROUTER_DATA结构不正确:', routerData);
+      return res.status(400).json({ error: '歌单数据格式不正确' });
+    }
+
+    // 根据不同的数据结构获取信息
+    let playlistInfo, medias;
+    if (routerData.loaderData.playlist_page) {
+      playlistInfo = routerData.loaderData.playlist_page.playlistInfo;
+      medias = routerData.loaderData.playlist_page.medias;
+    } else {
+      // 处理单曲的情况
+      const trackPage = routerData.loaderData.track_page;
+      playlistInfo = {
+        title: trackPage.metaData?.title || '单曲播放',
+        count_tracks: 1,
+        owner: { nickname: trackPage.metaData?.artist || '未知艺术家' },
+        create_time: Date.now() / 1000,
+        update_time: Date.now() / 1000
+      };
+      medias = [{
+        type: 'track',
+        entity: {
+          track: {
+            id: trackPage.track_id,
+            name: trackPage.metaData?.title,
+            artists: [{ name: trackPage.metaData?.artist }],
+            duration: trackPage.metaData?.duration || 0,
+            album: { name: trackPage.metaData?.album, url_cover: trackPage.metaData?.cover }
+          }
+        }
+      }];
+    }
 
     const result = {
       playlist_info: {
@@ -261,28 +373,52 @@ app.post('/downloadSelected', async (req, res) => {
 app.get('/download', async (req, res) => {
   const { url, fileName } = req.query;
 
-  if (!url) return res.status(400).json({ error: 'URL is required' });
-
-  // 设置文件名，默认文件名为 "download.mp4"（如果未提供 fileName）
-  const safeFileName = fileName
-    ? `${fileName.replace(/[\/\\:*?"<>|]/g, '')}.mp4` // 移除不安全字符
-    : 'download.mp4';
+  if (!url) {
+    return res.status(400).json({ error: 'URL is required' });
+  }
 
   try {
-    const response = await axios.get(url, {
+    // 设置文件名，移除不安全字符
+    const safeFileName = fileName
+      ? `${fileName.replace(/[\/\\:*?"<>|]/g, '')}.mp3` // 改为.mp3扩展名
+      : 'download.mp3';
+
+    // 添加更多请求头以模拟浏览器行为
+    const response = await axios({
+      method: 'get',
+      url: url,
       responseType: 'stream',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        'Referer': 'https://music.douyin.com',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Referer': 'https://music.douyin.com/',
+        'Origin': 'https://music.douyin.com'
       },
+      timeout: 30000 // 增加超时时间到30秒
     });
 
-    // 设置安全的文件名
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(safeFileName)}"`);
-    response.data.pipe(res); // 将文件流传输到响应中
+    // 设置响应头
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(safeFileName)}`);
+    
+    // 添加错误处理
+    response.data.on('error', (error) => {
+      console.error('Stream error:', error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: '下载过程中出错' });
+      }
+    });
+
+    // 流式传输数据
+    response.data.pipe(res);
+
   } catch (error) {
-    console.error('下载失败:', error.message);
-    res.status(500).json({ error: '下载失败' });
+    console.error('下载失败:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: '下载失败，请重试' });
+    }
   }
 });
 
