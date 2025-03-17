@@ -98,9 +98,46 @@ new Vue({
       this.selectedTracks = val;
     },
 
-    download(track) {
-      if (track.download_url) {
-        window.open(`/download?url=${encodeURIComponent(track.download_url)}&fileName=${encodeURIComponent(track.title || track.name)}`, '_blank');
+    async download(track) {
+      if (!track.download_url) {
+        this.$message.error('无效的下载链接');
+        return;
+      }
+
+      try {
+        // 显示加载提示
+        const loading = this.$loading({
+          lock: true,
+          text: '准备下载...',
+          spinner: 'el-icon-loading',
+          background: 'rgba(0, 0, 0, 0.7)'
+        });
+
+        // 创建下载链接
+        const downloadUrl = `/download?url=${encodeURIComponent(track.download_url)}&fileName=${encodeURIComponent(track.name)}`;
+        
+        // 创建一个隐藏的 iframe 来处理下载
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+        
+        // 监听 iframe 加载完成
+        iframe.onload = () => {
+          document.body.removeChild(iframe);
+          loading.close();
+        };
+        
+        // 设置 iframe 的 src 来触发下载
+        iframe.src = downloadUrl;
+
+        // 5秒后自动关闭加载提示
+        setTimeout(() => {
+          loading.close();
+        }, 5000);
+
+      } catch (error) {
+        console.error('下载出错:', error);
+        this.$message.error('下载失败，请重试');
       }
     },
 
