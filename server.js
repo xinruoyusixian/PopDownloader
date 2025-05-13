@@ -60,23 +60,6 @@ async function getDownloadUrl(id, type) {
       }
     });
 
-    // 如果没有找到数据，尝试从 modern-inline 中提取
-    if (!routerData) {
-      const inlineScript = document.querySelector('script[data-script-src="modern-inline"]');
-      if (inlineScript) {
-        try {
-          const content = inlineScript.textContent;
-          const match = content.match(/_ROUTER_DATA\s*=\s*({[\s\S]*?});/);
-          if (match && match[1]) {
-            routerData = JSON.parse(match[1]);
-            console.log('从modern-inline script中提取到_ROUTER_DATA');
-          }
-        } catch (error) {
-          console.error('从modern-inline解析_ROUTER_DATA时出错:', error);
-        }
-      }
-    }
-
     if (!routerData) {
       console.error('无法找到_ROUTER_DATA数据');
       return null;
@@ -175,23 +158,6 @@ app.get('/getPlaylist', async (req, res) => {
         }
       }
     });
-
-    // 如果没有找到数据，尝试从 data-script-src="modern-inline" 的script标签中提取
-    if (!routerData) {
-      const inlineScript = document.querySelector('script[data-script-src="modern-inline"]');
-      if (inlineScript) {
-        try {
-          const content = inlineScript.textContent;
-          const match = content.match(/_ROUTER_DATA\s*=\s*({[\s\S]*?});/);
-          if (match && match[1]) {
-            routerData = JSON.parse(match[1]);
-            console.log('从modern-inline script中提取到_ROUTER_DATA');
-          }
-        } catch (error) {
-          console.error('从modern-inline解析_ROUTER_DATA时出错:', error);
-        }
-      }
-    }
 
     if (!routerData) {
       console.error('无法找到_ROUTER_DATA数据');
