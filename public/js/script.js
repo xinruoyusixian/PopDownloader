@@ -15,19 +15,30 @@ new Vue({
     trackList: [],
     selectedTracks: [],
     showDialog: false, // 控制对话框的可见性
+    pagination: {
+      currentPage: 1,
+      pageSize: 10,
+      totalItems: 0,
+      totalPages: 0
+    },
   },
   methods: {
-    async fetchPlaylist() {
+    async fetchPlaylist(page = 1) {
       if (!this.urlInput.trim()) return this.$message.warning('请输入有效的歌单链接');
 
       this.loading = true;
       this.progress = 0;
       this.progressStatus = 'fetching'; // 设置状态为获取歌单
-      this.playlistInfo = {};
-      this.trackList = [];
+      
+      // 如果是第一页，清空之前的数据
+      if (page === 1) {
+        this.playlistInfo = {};
+        this.trackList = [];
+        this.selectedTracks = [];
+      }
 
       try {
-        const response = await fetch(`/getPlaylist?url=${encodeURIComponent(this.urlInput)}`);
+        const response = await fetch(`/getPlaylist?url=${encodeURIComponent(this.urlInput)}&page=${page}&pageSize=${this.pagination.pageSize}`);
         const data = await response.json();
 
         if (data.error) return this.$message.error(data.error);
@@ -37,6 +48,7 @@ new Vue({
           title: data.playlist_info.title,
           ownerName: data.playlist_info.owner_name,
           trackCount: data.playlist_info.track_count,
+          actualCount: data.playlist_info.actual_count || data.pagination.totalItems,
           createTime: new Date(data.playlist_info.create_time * 1000).toLocaleString(),
           updateTime: new Date(data.playlist_info.update_time * 1000).toLocaleString()
         };
@@ -45,6 +57,14 @@ new Vue({
           ...item,
           durationFormatted: this.formatDuration(item.duration)
         }));
+
+        // 更新分页信息
+        this.pagination = {
+          currentPage: data.pagination.currentPage,
+          pageSize: data.pagination.pageSize,
+          totalItems: data.pagination.totalItems,
+          totalPages: data.pagination.totalPages
+        };
       } catch (error) {
         console.error('Error fetching playlist:', error);
         this.$message.error('无法获取歌单信息');
@@ -96,6 +116,53 @@ new Vue({
 
     handleSelectionChange(val) {
       this.selectedTracks = val;
+    },
+
+    // 分页相关方法
+    handlePageChange(page) {
+      this.fetchPlaylist(page);
+    },
+
+    handleSizeChange(size) {
+      this.pagination.pageSize = size;
+      this.fetchPlaylist(1);
+    },
+
+    // 批量下载当前页面所有歌曲
+    downloadCurrentPage() {
+      if (this.trackList.length === 0) {
+        return this.$message.warning('当前页面没有歌曲');
+      }
+
+      this.progress = 0;
+      this.progressStatus = 'packaging';
+
+      const tracks = this.trackList.map(track => ({
+        id: track.id,
+        name: track.name,
+        type: track.type,
+        download_url: track.download_url
+      }));
+
+      fetch('/downloadSelected', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tracks: tracks })
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (data.error) return this.$message.error(data.error);
+          window.location.href = data.zipUrl;
+          this.$message.success(`正在下载第${this.pagination.currentPage}页的所有歌曲`);
+        })
+        .catch(error => {
+          console.error('Error creating ZIP file:', error);
+          this.$message.error('无法生成ZIP文件');
+        })
+        .finally(() => {
+          this.progress = 0;
+          this.progressStatus = '';
+        });
     },
 
     async download(track) {

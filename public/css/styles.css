@@ -124,10 +124,41 @@ body {
 
 /* 下载按钮容器 */
 .download-selected-container {
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
   padding-top: var(--spacing);
   border-top: 1px solid #ebeef5;
   margin-top: var(--spacing);
+}
+
+/* 分页容器样式 */
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  padding-top: var(--spacing);
+  margin-top: var(--spacing);
+  border-top: 1px solid #ebeef5;
+}
+
+.el-pagination {
+  padding: 0;
+}
+
+.el-pagination .el-pager li {
+  border-radius: 6px;
+  margin: 0 2px;
+}
+
+.el-pagination .el-pager li.active {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.el-pagination .btn-prev,
+.el-pagination .btn-next {
+  border-radius: 6px;
+  margin: 0 2px;
 }
 
 /* 歌曲列表样式 */
@@ -218,5 +249,23 @@ body {
 
   .button-container {
     flex-wrap: wrap;
+  }
+
+  .download-selected-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pagination-container {
+    padding: 12px 0;
+  }
+
+  .el-pagination {
+    text-align: center;
+  }
+
+  .el-pagination .el-pagination__sizes,
+  .el-pagination .el-pagination__jump {
+    display: none;
   }
 }
