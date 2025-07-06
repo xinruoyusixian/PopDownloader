@@ -52,6 +52,7 @@
           <h2>{{ playlistInfo.title }}</h2>
           <p>创建者：{{ playlistInfo.ownerName }}</p>
           <p>歌曲数量：{{ playlistInfo.trackCount }}</p>
+          <p>实际可下载：{{ playlistInfo.actualCount }}</p>
           <p>创建时间：{{ playlistInfo.createTime }}</p>
           <p>更新时间：{{ playlistInfo.updateTime }}</p>
         </div>
@@ -59,6 +60,9 @@
       <div class="download-selected-container">
         <el-button type="success" icon="el-icon-download" @click="downloadSelected" :disabled="!selectedTracks.length">
           下载选中歌曲 ({{ selectedTracks.length }})
+        </el-button>
+        <el-button type="primary" icon="el-icon-download" @click="downloadCurrentPage" :disabled="!trackList.length">
+          下载当前页所有歌曲
         </el-button>
       </div>
     </section>
@@ -98,6 +102,20 @@
           </template>
         </el-table-column>
       </el-table>
+      
+
+      <!-- 分页组件 -->
+      <div v-if="pagination.totalItems > 0" class="pagination-container">
+        <el-pagination
+          @size-change="handleSizeChange"
+          @current-change="handlePageChange"
+          :current-page="pagination.currentPage"
+          :page-sizes="[10, 20, 50, 100]"
+          :page-size="pagination.pageSize"
+          layout="total, sizes, prev, pager, next, jumper"
+          :total="pagination.totalItems">
+        </el-pagination>
+      </div>
     </section>
 
     <!-- 下载进度条 -->

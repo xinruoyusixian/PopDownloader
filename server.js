@@ -53,6 +53,7 @@ async function getDownloadUrl(id, type) {
           if (match && match[1]) {
             routerData = JSON.parse(match[1]);
             console.log('成功提取到_ROUTER_DATA');
+            console.log('_ROUTER_DATA数据结构:', Object.keys(routerData));
           }
         } catch (error) {
           console.error('解析_ROUTER_DATA时出错:', error);
@@ -102,7 +103,7 @@ async function getDownloadUrl(id, type) {
  * 解析用户分享链接并提取歌单信息
  */
 app.get('/getPlaylist', async (req, res) => {
-  const { url } = req.query;
+  const { url, page = 1, pageSize = 10 } = req.query;
   if (!url) return res.status(400).json({ error: 'URL is required' });
 
   const matchedUrls = url.match(/(https?:\/\/[^\s]+)/g);
@@ -151,7 +152,7 @@ app.get('/getPlaylist', async (req, res) => {
           const match = content.match(/_ROUTER_DATA\s*=\s*({[\s\S]*?});/);
           if (match && match[1]) {
             routerData = JSON.parse(match[1]);
-            console.log('成功提取到_ROUTER_DATA');
+            console.log('成功提取到_ROUTER_DATA，请求页码:', page);
           }
         } catch (error) {
           console.error('解析_ROUTER_DATA时出错:', error);
@@ -161,7 +162,13 @@ app.get('/getPlaylist', async (req, res) => {
 
     if (!routerData) {
       console.error('无法找到_ROUTER_DATA数据');
-      console.log('页面内容:', playlistData.data); // 输出页面内容以便调试
+      console.log('请求页码:', page);
+      console.log('页面内容长度:', playlistData.data.length);
+      console.log('页面是否包含_ROUTER_DATA关键字:', playlistData.data.includes('_ROUTER_DATA'));
+      // 只在调试时输出完整页面内容
+      if (process.env.DEBUG) {
+        console.log('页面内容:', playlistData.data);
+      }
       return res.status(400).json({ error: '无法解析歌单数据，请确认链接正确' });
     }
 
@@ -200,28 +207,64 @@ app.get('/getPlaylist', async (req, res) => {
       }];
     }
 
+    // 分页参数处理
+    const currentPage = parseInt(page) || 1;
+    const size = parseInt(pageSize) || 10;
+    
+    // 使用实际获取到的歌曲数量进行分页（API实际返回的数据）
+    const actualItems = medias.length;
+    const totalItems = actualItems; // 基于实际数据进行分页
+    const totalPages = Math.ceil(totalItems / size);
+    
+    // 进行本地分页处理
+    const startIndex = (currentPage - 1) * size;
+    const endIndex = Math.min(startIndex + size, totalItems);
+    
+    // 对媒体数据进行分页切片
+    const paginatedMedias = medias.slice(startIndex, endIndex);
+    
+    console.log(`分页信息: 第${currentPage}页, 每页${size}首, 总共${totalItems}首歌曲, 共${totalPages}页`);
+    console.log(`索引范围: ${startIndex} - ${endIndex}, 实际获取: ${paginatedMedias.length}首`);
+    
+
+
     const result = {
       playlist_info: {
         title: playlistInfo.title,
         track_count: playlistInfo.count_tracks,
+        actual_count: actualItems,
         owner_name: playlistInfo.owner.nickname,
         create_time: playlistInfo.create_time,
         update_time: playlistInfo.update_time,
         coverUrl: coverUrl
       },
       items: [],
+      pagination: {
+        currentPage: currentPage,
+        pageSize: size,
+        totalItems: totalItems,
+        totalPages: totalPages,
+        hasNext: currentPage < totalPages,
+        hasPrev: currentPage > 1
+      }
     };
 
     let processedCount = 0;
-    const totalItems = medias.length;
+    const paginatedTotal = paginatedMedias.length;
     let lastProgress = 0;
 
-    for (let media of medias) {
+    for (let media of paginatedMedias) {
       try {
-        const downloadUrl = await getDownloadUrl(
-          media.type === 'track' ? media.entity.track.id : media.entity.video.video_id,
-          media.type
-        );
+        let downloadUrl = null;
+        try {
+          downloadUrl = await getDownloadUrl(
+            media.type === 'track' ? media.entity.track.id : media.entity.video.video_id,
+            media.type
+          );
+        } catch (urlError) {
+          console.error(`获取 ${media.type} 的下载链接失败:`, urlError.message);
+          downloadUrl = null; // 设置为null，但仍然添加到结果中
+        }
 
         result.items.push({
           id: media.type === 'track' ? media.entity.track.id : media.entity.video.video_id,
@@ -236,7 +279,7 @@ app.get('/getPlaylist', async (req, res) => {
 
         // 更新进度
         processedCount++;
-        const progress = Math.floor((processedCount / totalItems) * 100);
+        const progress = Math.floor((processedCount / paginatedTotal) * 100);
 
         if (progress > lastProgress) {
           lastProgress = progress;
@@ -244,7 +287,9 @@ app.get('/getPlaylist', async (req, res) => {
         }
 
       } catch (error) {
-        console.error(`获取 ${media.type} 的下载链接失败:`, error.message);
+        console.error(`处理 ${media.type} 时出错:`, error.message);
+        // 即使出错也要增加计数，确保进度正常
+        processedCount++;
       }
     }
 
