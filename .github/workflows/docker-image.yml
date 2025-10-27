@@ -18,11 +18,11 @@ jobs:
 
       - name: Build Docker Image
         run: |
-          docker build -t PopDownloader:latest .
+          docker build -t pop-downloader:latest .
 
       - name: Export Docker Image
         run: |
-          docker save PopDownloader:latest > PopDownloader-latest.tar
+          docker save pop-downloader:latest > PopDownloader-latest.tar
 
       - name: Upload Docker Image as Artifact
         uses: actions/upload-artifact@v4
