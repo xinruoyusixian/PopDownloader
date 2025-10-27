@@ -24,14 +24,18 @@ jobs:
         run: |
           docker save pop-downloader:latest > PopDownloader-latest.tar
 
+      - name: Get Git Commit Hash
+        id: git_commit_hash
+        run: echo "GIT_COMMIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
       - name: Create or Update Release
         id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.ref_name }}
-          release_name: Release ${{ github.ref_name }}
+          tag_name: ${{ env.GIT_COMMIT_HASH }}
+          release_name: Release ${{ env.GIT_COMMIT_HASH }}
           draft: false
           prerelease: false
 
