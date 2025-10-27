@@ -42,4 +42,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           files: PopDownloader-latest.tar
-          tag: ${{ steps.create_release.outputs.tag_name }}
+          tag_name: ${{ steps.create_release.outputs.tag_name }}
